@@ -74,63 +74,14 @@ class WooImporterService
             self::importerLog('nessun file caricato, non hai selezionato un file');
         }
     }
-    private function updateProducts()
+    private function updateProducts() : bool
     {
-        //info: ▼ ritorna un array, di array delle righe del file ( e non colonne);
-        $getArrayFromFile =  function ($file, array $intestazioneCsv): array|false {
-            /*creiamo un array con due array dentro, uno per 'chiave' e uno per 'valore'
-                   Cosi potrò confrontare ognuno di questi con array_diff
-                   */
-
-            $rowWidth = sizeof($intestazioneCsv);
-
-            $ar = file($file);
-            $arRet = [];
-
-            //info: ▼ da usare se voglio una colonna per ogni sub array
-            // foreach ($intestazioneCsv as $col) {
-            //     echo $col . '<br>';
-            //     $arRet["$col"] = [];
-            // }
-
-
-            //info: controllo se l'intestazione di csv e tabella sql sono uguali
-            $fileColumns = str_getcsv(array_shift($ar));
-
-            if (
-
-                sizeof($fileColumns) === $rowWidth && sizeof(array_intersect($fileColumns, $intestazioneCsv)) > 0
-            ) {
-
-
-                foreach ($ar as $row) {
-
-                    $row = str_getcsv($row);
-
-                    //info: controllo che le righe del csv contengano il numero di campi giusto
-                    if ($rowWidth === sizeof($row)) {
-
-
-                        array_push($arRet, $row);
-                    } else {
-                        self::importerLog('file importato ignorato, le righe del file csv non sono nel formato corretto');
-                        return false;
-                    }
-                }
-                return $arRet;
-            } else {
-                self::importerLog('file importato ignorato, l\'intestazione del file csv non è corretta');
-                return false;
-            }
-        };
 
         $intestazioneCsvSemplici = explode(",", "sku,nome,prezzo,prezzo scontato,quantita");
-        $intestazioneCsvVariabili = explode(",", "id,id_padre,sku,nome,prezzo,prezzo scontato,quantita,taglia");
         $file = WOO_IMPORTER_PATH . self::FILE_NAME;
         $csv = [];
         $csv = file($file);
 
-        //info: controllo se l'intestazione di csv e tabella sql sono uguali
 
         $fileColumns = str_getcsv(array_shift($csv));
 
@@ -139,105 +90,17 @@ class WooImporterService
 
             sizeof($fileColumns) === sizeof($intestazioneCsvSemplici) && sizeof(array_intersect($fileColumns, $intestazioneCsvSemplici))
         ) {
-            $this->updateSimpleProducts($csv, sizeof($intestazioneCsvSemplici));
-        } elseif (sizeof($fileColumns) === sizeof($intestazioneCsvVariabili) && sizeof(array_intersect($fileColumns, $intestazioneCsvVariabili))) {
-
-            $this->updateVariableProducts($csv);
+           return $this->updateSimpleProducts($csv, sizeof($intestazioneCsvSemplici));
+        } else{
+            return false;
         }
     }
 
     private function updateVariableProducts($csv)
     {
-        $parent_id = 0;
-        self::importerLog("inizio aggiornamento prodotti");
-        $parent_id = 0;
-
-        foreach ($csv as $row) {
-
-            $row = str_getcsv($row);
-
-            $attrs = ['taglia', ['s', 'm', 'l', 'xl']];
-
-            $data["id"] = $row[0];
-            $data["id_padre"] = $row[1];
-            $data["sku"] = $row[2];
-            $data["nome"] = $row[3];
-            $data["prezzo"] = $row[4];
-            $data["prezzo_scontato"] = $row[5];
-            $data["quantita"] = $row[7];
-
-            $data["attr_value"] = $row[6];
-
-
-            $data["attr"] = $attrs[0];
-            $data["attr_options"] = $attrs[1];
-
-            $product_id = wc_get_product_id_by_sku($data['sku']);
-
-            if ($data["id_padre"] == 0 && sizeof($row) == 8) {
-            echo "<h1>entro 0</h1>";
-
-                $product = wc_get_product($product_id);
-
-                if (!$product) {
-
-                    $product = new WC_Product_Variable();
-                }
-
-
-
-                $product->set_name($data['nome']);
-                $product->set_sku($data['sku']);
-                $attribute = new WC_Product_Attribute();
-                $attribute->set_name($data['attr']);
-                $attribute->set_options($data['attr_options']);
-                $attribute->set_position(0);
-                $attribute->set_visible(true);
-                $attribute->set_variation(true);
-                $product->set_attributes(array($attribute));
-                $product->save();
-
-                //ma dove me lo tengo il parent_id
-                $parent_id = $product->get_id();
-
-                $actualProduct = array_push($actualProducts, $parent_id);
-
-            } elseif ($data["id_padre"] == 1 && sizeof($row) == 8) {
-                echo "<h1>entro 1</h1>";
-                $variation = wc_get_product_object('variation', $product_id);
-
-                if (!$variation) {
-                    $variation = new WC_Product_Variation();
-                }
-
-                $variation->set_parent_id($parent_id);
-                $variation->set_sku($data['sku']);
-
-                $variation->set_price($data['prezzo']);
-                $variation->set_sale_price($data['prezzo_scontato']);
-                $variation->set_manage_stock(true);
-                $variation->set_stock_quantity($data['quantita']);
-                $variation->set_attributes(array($data['attr'] => $data['attr_value']));
-                $variation->save();
-
-                $actualProduct = array_push($actualProducts, $variation->get_id());
-            }
-        }
-
-        $productsToDelete = wc_get_products(array(
-            'type' => 'simple',
-            'exclude' => $actualProducts,
-        ));
-
-
-
-        foreach ($productsToDelete as $id) {
-            $product = wc_get_product($id);
-            $eliminato = $product->get_sku();
-            $product->delete();
-            self::importerLog("è stato spostato nel cestino il prodotto con sku '$eliminato'");
-        }
+ //funzione in corso di implementazione nel branch variableProducts
     }
+    
     private function updateSimpleProducts($csv, $width)
     {
 
